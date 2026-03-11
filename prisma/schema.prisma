@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Зарегистрированный внешний сервис, отправляющий логи
+model Service {
+  id          String     @id @default(cuid())
+  /// Человекочитаемое имя сервиса (отображается в Telegram топике)
+  name        String     @db.VarChar(100)
+  /// Уникальный slug для идентификации (латиница, kebab-case)
+  slug        String     @unique @db.VarChar(50)
+  /// Хеш API-ключа (sha256). Оригинальный ключ НЕ хранится
+  apiKeyHash  String     @unique @map("api_key_hash") @db.VarChar(64)
+  /// Последние 4 символа ключа для отображения в админке
+  apiKeyLast4 String     @map("api_key_last4") @db.VarChar(4)
+  /// ID топика в Telegram форуме. null = топик ещё не создан. @unique: один топик = один сервис
+  topicId     Int?       @unique @map("topic_id")
+  /// Флаг активности. Неактивный сервис не может отправлять логи
+  isActive    Boolean    @default(true) @map("is_active")
+  /// Описание сервиса (опционально)
+  description String?    @db.VarChar(500)
+  /// Дата создания
+  createdAt   DateTime   @default(now()) @map("created_at")
+  /// Дата последнего обновления
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  /// Связь с логами
+  errorLogs   ErrorLog[]
+
+  @@index([isActive], name: "idx_service_is_active")
+  @@map("services")
+}
+
+/// Лог ошибки, полученный от внешнего сервиса
+model ErrorLog {
+  id            String   @id @default(cuid())
+  /// Ссылка на сервис-источник
+  serviceId     String   @map("service_id")
+  /// Уровень ошибки
+  level         LogLevel
+  /// Текст ошибки
+  message       String   @db.VarChar(2000)
+  /// Stack trace (опционально)
+  stackTrace    String?  @map("stack_trace") @db.Text
+  /// Произвольные метаданные (userId, requestId, url и т.д.)
+  metadata      Json?    @db.JsonB
+  /// SHA-256 fingerprint для дедупликации
+  fingerprint   String   @db.VarChar(64)
+  /// Было ли сообщение отправлено в Telegram (false = дедуплицировано)
+  telegramSent  Boolean  @default(false) @map("telegram_sent")
+  /// Дата создания
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  /// Связь с сервисом
+  service       Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId, createdAt(sort: Desc)], name: "idx_errorlog_service_created")
+  @@index([fingerprint, createdAt(sort: Desc)], name: "idx_errorlog_fingerprint_created")
+  @@index([level, createdAt(sort: Desc)], name: "idx_errorlog_level_created")
+  @@index([createdAt(sort: Desc)], name: "idx_errorlog_created")
+  @@map("error_logs")
+}
+
+/// Уровни логирования
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+  FATAL
+
+  @@map("log_level")
+}
