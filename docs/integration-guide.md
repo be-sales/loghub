@@ -19,7 +19,7 @@ import { LogHubClient } from '@besales/loghub-client';
 
 const loghub = new LogHubClient({
   endpoint: 'https://loghub.example.com',
-  apiKey: 'sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+  apiKey: 'sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // ← ваш API-ключ
 });
 
 await loghub.error('Cannot connect to database', {
@@ -257,7 +257,7 @@ bot.catch((error, ctx) => {
 ```bash
 curl -X POST https://loghub.example.com/api/logs/ingest \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" \
+  -H "X-API-Key: sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
   -d '{
     "level": "ERROR",
     "message": "Connection timeout",

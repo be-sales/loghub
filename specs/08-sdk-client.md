@@ -19,7 +19,7 @@ import { LogHubClient, LogLevel } from '@besales/loghub-client';
 
 const loghub = new LogHubClient({
   endpoint: 'https://loghub.example.com',
-  apiKey: 'sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+  apiKey: 'sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
 });
 
 // Простая отправка ошибки

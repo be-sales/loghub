@@ -1,6 +1,6 @@
 # @besales/loghub-client
 
-Лёгкий TypeScript-клиент для отправки логов в [LogHub](https://github.com/besales/loghub). Ноль внешних зависимостей — только нативный `fetch` (Node.js >= 18).
+Лёгкий TypeScript-клиент для отправки логов в [LogHub](https://github.com/be-sales/loghub). Ноль внешних зависимостей — только нативный `fetch` (Node.js >= 18).
 
 ## Установка
 
@@ -17,7 +17,7 @@ import { LogHubClient } from '@besales/loghub-client';
 
 const loghub = new LogHubClient({
   endpoint: 'https://loghub.example.com',
-  apiKey: 'sk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6',
+  apiKey: 'sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // ← ваш API-ключ
 });
 
 await loghub.error('Cannot connect to database', {

@@ -215,7 +215,7 @@ export class UpdateServiceDto {
 **Response 200:**
 ```json
 {
-  "apiKey": "sk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4",
+  "apiKey": "sk_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   "apiKeyLast4": "l5k4"
 }
 ```

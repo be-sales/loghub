@@ -6,7 +6,7 @@ import { createPrismaMock } from '../utils/prisma-mock';
 import { createRedisMock } from '../utils/redis-mock';
 
 const TEST_HMAC_SECRET = 'test-hmac-secret-that-is-at-least-32-chars!!';
-const TEST_API_KEY = 'sk_live_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb';
+const TEST_API_KEY = 'sk_live_' + '0'.repeat(32);
 const TEST_SERVICE_ID = 'clxxxxxxxxxxxxxxxxxxxxxxxxx';
 const TEST_SLUG = 'my-service';
 
