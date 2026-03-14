@@ -45,6 +45,7 @@ export class DedupFlushService {
               message: true,
               level: true,
               serviceId: true,
+              fingerprint: true,
             },
           });
 
@@ -55,6 +56,7 @@ export class DedupFlushService {
             message: lastLog.message,
             repeatCount,
             windowSeconds: DEDUP_WINDOW_SECONDS,
+            fingerprint: lastLog.fingerprint,
           });
 
           await this.dedup.clearEntry(fingerprint);

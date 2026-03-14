@@ -33,6 +33,13 @@ export interface SendDedupSummaryPayload {
   message: string;
   repeatCount: number;
   windowSeconds: number;
+  fingerprint?: string | null;
+}
+
+interface TopicContext {
+  topicId: number;
+  serviceName: string;
+  serviceSlug: string;
 }
 
 /**
@@ -64,6 +71,7 @@ export class TelegramService implements OnModuleInit {
   private readonly logger = new Logger(TelegramService.name);
   private botToken!: string;
   private forumChatId!: string;
+  private environment = 'development';
 
   constructor(
     private readonly config: ConfigService,
@@ -77,6 +85,7 @@ export class TelegramService implements OnModuleInit {
     this.forumChatId = this.config.getOrThrow<string>(
       'TELEGRAM_FORUM_CHAT_ID',
     );
+    this.environment = this.config.get<string>('NODE_ENV') ?? 'development';
   }
 
   /**
@@ -87,10 +96,15 @@ export class TelegramService implements OnModuleInit {
     serviceId: string,
     payload: SendErrorLogPayload,
   ): Promise<void> {
-    const topicId = await this.ensureTopicExists(serviceId);
-    const text = this.formatter.formatErrorLog(payload);
+    const topic = await this.ensureTopicExists(serviceId);
+    const text = this.formatter.formatErrorLog({
+      ...payload,
+      serviceName: topic.serviceName,
+      serviceSlug: topic.serviceSlug,
+      environment: this.environment,
+    });
 
-    await this.sendMessageWithRetry(topicId, text);
+    await this.sendMessageWithRetry(topic.topicId, text);
   }
 
   /**
@@ -100,24 +114,33 @@ export class TelegramService implements OnModuleInit {
     serviceId: string,
     payload: SendDedupSummaryPayload,
   ): Promise<void> {
-    const topicId = await this.ensureTopicExists(serviceId);
-    const text = this.formatter.formatDedupSummary(payload);
+    const topic = await this.ensureTopicExists(serviceId);
+    const text = this.formatter.formatDedupSummary({
+      ...payload,
+      serviceName: topic.serviceName,
+      serviceSlug: topic.serviceSlug,
+      environment: this.environment,
+    });
 
-    await this.sendMessageWithRetry(topicId, text);
+    await this.sendMessageWithRetry(topic.topicId, text);
   }
 
   /**
    * Гарантирует существование топика для сервиса.
    * Использует Redis-блокировку для предотвращения гонок при создании (§6.7.1).
    */
-  private async ensureTopicExists(serviceId: string): Promise<number> {
+  private async ensureTopicExists(serviceId: string): Promise<TopicContext> {
     const service = await this.prisma.service.findUniqueOrThrow({
       where: { id: serviceId },
       select: { topicId: true, name: true, slug: true },
     });
 
     if (service.topicId !== null) {
-      return service.topicId;
+      return {
+        topicId: service.topicId,
+        serviceName: service.name,
+        serviceSlug: service.slug,
+      };
     }
 
     // Попытка захватить Redis-блокировку
@@ -148,7 +171,11 @@ export class TelegramService implements OnModuleInit {
         });
 
         if (updated.topicId !== null) {
-          return updated.topicId;
+          return {
+            topicId: updated.topicId,
+            serviceName: service.name,
+            serviceSlug: service.slug,
+          };
         }
       }
 
@@ -195,7 +222,11 @@ export class TelegramService implements OnModuleInit {
         );
       }
 
-      return topicId;
+      return {
+        topicId,
+        serviceName: service.name,
+        serviceSlug: service.slug,
+      };
     } finally {
       // Снятие блокировки — только захватившим инстансом
       await this.redis.del(lockKey).catch((error: Error) => {

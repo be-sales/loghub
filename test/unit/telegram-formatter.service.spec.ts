@@ -12,161 +12,184 @@ describe('TelegramFormatterService', () => {
   });
 
   const basePayload = {
-    logId: 'test-log-id',
+    serviceName: 'LogHub API',
+    serviceSlug: 'loghub-api',
+    environment: 'production',
+    logId: 'log_123',
     level: 'ERROR',
-    message: 'Connection failed to database',
-    fingerprint: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    message: 'PrismaClientKnownRequestError: Unique constraint failed on the fields: (`slug`)',
+    fingerprint:
+      'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    stackTrace: [
+      'PrismaClientKnownRequestError: Unique constraint failed on the fields: (`slug`)',
+      '    at ServicesService.create (/app/src/core/services/services.service.ts:131:15)',
+      '    at AdminController.createService (/app/src/admin/admin.controller.ts:102:12)',
+    ].join('\n'),
+    metadata: {
+      requestId: 'req_123',
+      method: 'POST',
+      path: '/api/admin/services',
+      context: 'ServicesService.create',
+      userId: 'usr_123',
+      slug: 'railway-smoke',
+      extra: {
+        duplicate: true,
+      },
+    },
   };
 
   describe('formatErrorLog', () => {
-    it('должен содержать emoji, level, timestamp и message', () => {
+    it('должен содержать сервис, environment, logId и fingerprint', () => {
       const result = formatter.formatErrorLog(basePayload);
 
       expect(result).toContain('🔴');
-      expect(result).toContain('ERROR');
-      expect(result).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/);
-      expect(result).toContain('Connection failed to database');
-      expect(result).toContain('abcdef12');
-    });
-
-    it('должен обрезать stack trace до 15 строк', () => {
-      const stackLines = Array.from(
-        { length: 20 },
-        (_, i) => `    at function${i} (file${i}.ts:${i}:1)`,
+      expect(result).toContain('<b>ERROR · production</b>');
+      expect(result).toContain('<b>LogHub API</b> · <code>loghub-api</code>');
+      expect(result).toContain('<b>Log ID:</b> <code>log_123</code>');
+      expect(result).toContain('<b>Fingerprint:</b> <code>abcdef12</code>');
+      expect(result).toMatch(
+        /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC[+-]\d{2}:\d{2}/,
       );
+    });
+
+    it('должен извлекать тип, контекст, HTTP и Request ID', () => {
+      const result = formatter.formatErrorLog(basePayload);
+
+      expect(result).toContain('<b>Тип:</b> PrismaClientKnownRequestError');
+      expect(result).toContain('<b>Контекст:</b> ServicesService.create');
+      expect(result).toContain('<b>HTTP:</b> POST /api/admin/services');
+      expect(result).toContain('<b>Request ID:</b> <code>req_123</code>');
+    });
+
+    it('должен выносить ключевые metadata в отдельный блок и не дублировать promoted fields', () => {
+      const result = formatter.formatErrorLog(basePayload);
+
+      expect(result).toContain('<b>Ключевые данные:</b>');
+      expect(result).toContain('userId=usr_123');
+      expect(result).toContain('slug=railway-smoke');
+      expect(result).not.toContain('"requestId": "req_123"');
+      expect(result).not.toContain('"method": "POST"');
+      expect(result).not.toContain('"path": "/api/admin/services"');
+      expect(result).toContain('<b>Metadata:</b>');
+      expect(result).toContain('"duplicate": true');
+    });
+
+    it('должен использовать stack как fallback-контекст при отсутствии metadata.context', () => {
+      const result = formatter.formatErrorLog({
+        ...basePayload,
+        metadata: {
+          requestId: 'req_123',
+        },
+      });
+
+      expect(result).toContain('<b>Контекст:</b> ServicesService.create');
+    });
+
+    it('должен обрезать stack trace до максимума строк', () => {
       const payload = {
         ...basePayload,
-        stackTrace: stackLines.join('\n'),
+        stackTrace: Array.from(
+          { length: TELEGRAM_STACK_MAX_LINES + 5 },
+          (_, index) => `    at function${index} (file${index}.ts:${index}:1)`,
+        ).join('\n'),
       };
 
       const result = formatter.formatErrorLog(payload);
 
-      // Первые 15 строк присутствуют
-      for (let i = 0; i < TELEGRAM_STACK_MAX_LINES; i++) {
-        expect(result).toContain(`function${i}`);
-      }
-
-      // 16-я и далее — нет
-      expect(result).not.toContain('function15');
-      expect(result).not.toContain('function19');
-
-      // Суффикс с количеством обрезанных строк
-      expect(result).toContain('... ещё 5 строк');
+      expect(result).toContain('function0');
+      expect(result).toContain(`... ещё 5 строк`);
+      expect(result).not.toContain(`function${TELEGRAM_STACK_MAX_LINES + 1}`);
     });
 
-    it('должен форматировать metadata как JSON', () => {
-      const payload = {
+    it('должен формировать компактный WARN без тяжёлых stack и metadata блоков', () => {
+      const result = formatter.formatErrorLog({
         ...basePayload,
-        metadata: { userId: 'u1', path: '/api/test' },
-      };
+        level: 'WARN',
+      });
 
-      const result = formatter.formatErrorLog(payload);
-
-      expect(result).toContain('userId');
-      expect(result).toContain('/api/test');
-      expect(result).toContain('📎');
+      expect(result).toContain('🟡');
+      expect(result).toContain('<b>WARN · production</b>');
+      expect(result).toContain('<b>Сообщение:</b>');
+      expect(result).not.toContain('<b>Тип:</b>');
+      expect(result).not.toContain('<b>Stack:</b>');
+      expect(result).not.toContain('<b>Metadata:</b>');
+      expect(result).toContain('<b>Ключевые данные:</b>');
     });
 
-    it('должен ограничивать общую длину до TELEGRAM_MAX_MESSAGE_LENGTH', () => {
-      const payload = {
-        ...basePayload,
-        message: 'x'.repeat(10_000),
-      };
-
-      const result = formatter.formatErrorLog(payload);
-
-      expect(result.length).toBeLessThanOrEqual(TELEGRAM_MAX_MESSAGE_LENGTH);
-      expect(result).toContain('... (обрезано)');
-    });
-
-    it('должен корректно закрывать HTML-теги при обрезке внутри <code>', () => {
-      const longStack = Array.from(
-        { length: 15 },
-        (_, i) => `    at function${i} (${'x'.repeat(300)}.ts:${i}:1)`,
-      ).join('\n');
-      const payload = {
-        ...basePayload,
-        stackTrace: longStack,
-      };
-
-      const result = formatter.formatErrorLog(payload);
-
-      expect(result.length).toBeLessThanOrEqual(TELEGRAM_MAX_MESSAGE_LENGTH);
-      expect(result).toContain('... (обрезано)');
-
-      // Проверяем что все открытые теги закрыты
-      const openCode = (result.match(/<code>/g) || []).length;
-      const closeCode = (result.match(/<\/code>/g) || []).length;
-      expect(openCode).toBe(closeCode);
-
-      const openB = (result.match(/<b>/g) || []).length;
-      const closeB = (result.match(/<\/b>/g) || []).length;
-      expect(openB).toBe(closeB);
-    });
-
-    it('должен экранировать HTML-спецсимволы', () => {
-      const payload = {
+    it('должен корректно экранировать HTML-спецсимволы', () => {
+      const result = formatter.formatErrorLog({
         ...basePayload,
         message: '<script>alert("xss")</script> & more > less',
-      };
+        metadata: { requestId: 'req_<1>' },
+      });
 
-      const result = formatter.formatErrorLog(payload);
-
-      expect(result).toContain('&lt;script&gt;');
-      expect(result).toContain('&amp; more');
-      expect(result).toContain('&gt; less');
+      expect(result).toContain('&lt;script&gt;alert("xss")&lt;/script&gt;');
+      expect(result).toContain('&amp; more &gt; less');
+      expect(result).toContain('req_&lt;1&gt;');
       expect(result).not.toContain('<script>');
+    });
+
+    it('должен сохранять валидный HTML и лимит длины при длинном stack и metadata', () => {
+      const result = formatter.formatErrorLog({
+        ...basePayload,
+        stackTrace: Array.from(
+          { length: TELEGRAM_STACK_MAX_LINES },
+          (_, index) => `TypeError: ${'x'.repeat(250)} at function${index}`,
+        ).join('\n'),
+        metadata: {
+          requestId: 'req_123',
+          userId: 'usr_123',
+          extra: {
+            payload: 'x'.repeat(10_000),
+          },
+        },
+      });
+
+      expect(result.length).toBeLessThanOrEqual(TELEGRAM_MAX_MESSAGE_LENGTH);
+      expect((result.match(/<pre>/g) || []).length).toBe(
+        (result.match(/<\/pre>/g) || []).length,
+      );
+      expect((result.match(/<code>/g) || []).length).toBe(
+        (result.match(/<\/code>/g) || []).length,
+      );
+      expect((result.match(/<b>/g) || []).length).toBe(
+        (result.match(/<\/b>/g) || []).length,
+      );
+      expect(result).toContain('<b>Log ID:</b>');
+      expect(result).toContain('<b>Fingerprint:</b>');
     });
   });
 
   describe('formatDedupSummary', () => {
-    it('должен содержать repeatCount и windowSeconds', () => {
+    it('должен содержать сервис, environment, repeatCount и fingerprint', () => {
       const result = formatter.formatDedupSummary({
+        serviceName: 'LogHub API',
+        serviceSlug: 'loghub-api',
+        environment: 'production',
         level: 'ERROR',
         message: 'DB connection error',
         repeatCount: 47,
         windowSeconds: 180,
+        fingerprint:
+          'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
       });
 
-      expect(result).toContain('47');
-      expect(result).toContain('3 мин');
-      expect(result).toContain('🔴');
       expect(result).toContain('⚠️');
-      expect(result).toContain('DB connection error');
+      expect(result).toContain('ERROR повторился ещё 47 раз за 3 мин');
+      expect(result).toContain('<b>LogHub API</b> · <code>loghub-api</code> · production');
+      expect(result).toContain('<b>Сообщение:</b> 🔴 DB connection error');
+      expect(result).toContain('<b>Fingerprint:</b> <code>abcdef12</code>');
     });
   });
 
   describe('formatWelcomeMessage', () => {
-    it('должен содержать имя и slug сервиса', () => {
+    it('должен соответствовать новому шаблону', () => {
       const result = formatter.formatWelcomeMessage('My Service', 'my-svc');
 
-      expect(result).toContain('My Service');
-      expect(result).toContain('my-svc');
-      expect(result).toContain('🔧');
-    });
-  });
-
-  describe('levelEmoji', () => {
-    it('должен возвращать корректные emoji для каждого уровня', () => {
-      const levels: Array<{ level: string; emoji: string }> = [
-        { level: 'DEBUG', emoji: '⚪' },
-        { level: 'INFO', emoji: '🔵' },
-        { level: 'WARN', emoji: '🟡' },
-        { level: 'ERROR', emoji: '🔴' },
-        { level: 'FATAL', emoji: '💀' },
-        { level: 'UNKNOWN', emoji: '❓' },
-      ];
-
-      for (const { level, emoji } of levels) {
-        const result = formatter.formatDedupSummary({
-          level,
-          message: 'test',
-          repeatCount: 1,
-          windowSeconds: 60,
-        });
-
-        expect(result).toContain(emoji);
-      }
+      expect(result).toContain('🔧 <b>Топик подключён</b>');
+      expect(result).toContain('<b>Сервис:</b> My Service');
+      expect(result).toContain('<b>Slug:</b> <code>my-svc</code>');
+      expect(result).toContain('summary дедупликации');
     });
   });
 });

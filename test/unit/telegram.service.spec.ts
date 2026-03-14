@@ -30,8 +30,10 @@ function createConfigMock(): ConfigService {
   const values: Record<string, string> = {
     TELEGRAM_BOT_TOKEN: TEST_BOT_TOKEN,
     TELEGRAM_FORUM_CHAT_ID: TEST_CHAT_ID,
+    NODE_ENV: 'development',
   };
   return {
+    get: jest.fn((key: string) => values[key]),
     getOrThrow: jest.fn((key: string) => {
       const value = values[key];
       if (!value) throw new Error(`Missing env: ${key}`);
@@ -137,12 +139,19 @@ describe('TelegramService', () => {
     it('должен отправить сообщение в существующий топик', async () => {
       prismaMock.service.findUniqueOrThrow.mockResolvedValue({
         topicId: TEST_TOPIC_ID,
-        name: 'Test',
-        slug: 'test',
+        name: 'Test Service',
+        slug: 'test-service',
       });
       mockFetchSuccess();
 
       await service.sendErrorLog(TEST_SERVICE_ID, basePayload);
+
+      expect(formatterMock.formatErrorLog).toHaveBeenCalledWith({
+        ...basePayload,
+        serviceName: 'Test Service',
+        serviceSlug: 'test-service',
+        environment: 'development',
+      });
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -197,8 +206,8 @@ describe('TelegramService', () => {
     beforeEach(() => {
       prismaMock.service.findUniqueOrThrow.mockResolvedValue({
         topicId: TEST_TOPIC_ID,
-        name: 'Test',
-        slug: 'test',
+        name: 'Test Service',
+        slug: 'test-service',
       });
     });
 
@@ -253,8 +262,8 @@ describe('TelegramService', () => {
     it('должен ожидать при превышении rate limit', async () => {
       prismaMock.service.findUniqueOrThrow.mockResolvedValue({
         topicId: TEST_TOPIC_ID,
-        name: 'Test',
-        slug: 'test',
+        name: 'Test Service',
+        slug: 'test-service',
       });
       redisMock.incr.mockResolvedValue(TELEGRAM_RATE_LIMIT_PER_SECOND + 1);
       mockFetchSuccess();
@@ -302,8 +311,8 @@ describe('TelegramService', () => {
       prismaMock.service.findUniqueOrThrow
         .mockResolvedValueOnce({
           topicId: null,
-          name: 'Test',
-          slug: 'test',
+          name: 'Test Service',
+          slug: 'test-service',
         })
         // Второй вызов (re-read после sleep): topicId уже создан другим процессом
         .mockResolvedValueOnce({
@@ -338,8 +347,8 @@ describe('TelegramService', () => {
     it('должен отправить сводку дедупликации', async () => {
       prismaMock.service.findUniqueOrThrow.mockResolvedValue({
         topicId: TEST_TOPIC_ID,
-        name: 'Test',
-        slug: 'test',
+        name: 'Test Service',
+        slug: 'test-service',
       });
       mockFetchSuccess();
 
@@ -348,13 +357,18 @@ describe('TelegramService', () => {
         message: 'DB error',
         repeatCount: 5,
         windowSeconds: 180,
+        fingerprint: 'abcdef1234567890',
       });
 
       expect(formatterMock.formatDedupSummary).toHaveBeenCalledWith({
+        serviceName: 'Test Service',
+        serviceSlug: 'test-service',
+        environment: 'development',
         level: 'ERROR',
         message: 'DB error',
         repeatCount: 5,
         windowSeconds: 180,
+        fingerprint: 'abcdef1234567890',
       });
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });

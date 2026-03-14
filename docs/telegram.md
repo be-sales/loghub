@@ -51,43 +51,66 @@ Redis-based rate limiter:
 ### formatErrorLog
 
 ```
-🔴 ERROR | 2026-03-10 14:32:05
+🔴 ERROR · production
+LogHub API · loghub-api
+2026-03-14 20:17:58 UTC+03:00
 
-Cannot connect to database after timeout
+Тип: PrismaClientKnownRequestError
+Сообщение: Unique constraint failed on the fields: (`slug`)
+Контекст: ServicesService.create
+HTTP: POST /api/admin/services
+Request ID: req_456
+Log ID: cmmqqmt3g0003nv01heh95349
+Fingerprint: b231740d
 
-📋 Stack:
-<code>Error: Connection timeout
-    at DbService.connect (/app/src/db.ts:42:10)</code>
+Ключевые данные:
+userId=usr_123
+slug=railway-smoke
 
-📎 Metadata:
-<code>{"userId":"usr_123"}</code>
+Stack:
+PrismaClientKnownRequestError: Unique constraint failed...
 
-🔑 abc1def2
+Metadata:
+{
+  "extra": { "duplicate": true }
+}
 ```
 
 - Emoji по уровню: DEBUG ⚪, INFO 🔵, WARN 🟡, ERROR 🔴, FATAL 💀
+- В заголовке всегда показываются уровень, environment, service name и slug
+- Для `ERROR`/`FATAL` formatter пытается извлечь:
+  - `Тип` из stack/message (`TypeError`, `PrismaClientKnownRequestError` и т.д.)
+  - `Контекст` из metadata (`context`, `source`, `module`, `handler`) или из первого frame stack
+  - `HTTP` из `method + path`
+  - `Request ID` из `requestId`, `correlationId`, `traceId`
+- `WARN`/`INFO`/`DEBUG` форматируются компактнее: без тяжёлых stack/metadata блоков
 - Stack trace: макс. `TELEGRAM_STACK_MAX_LINES = 15` строк
-- Metadata: макс. `TELEGRAM_METADATA_MAX_LENGTH = 500` символов
+- Metadata: макс. `TELEGRAM_METADATA_MAX_LENGTH = 500` символов, показывается только после выноса ключевых полей
 - Fingerprint: первые 8 символов
+- Приоритет truncation: базовая выжимка → ключевые данные → stack → metadata
 - Общая обрезка до `TELEGRAM_MAX_MESSAGE_LENGTH = 4096` с корректным закрытием HTML-тегов
 
 ### formatDedupSummary
 
 ```
-⚠️ Ошибка повторилась ещё 47 раз за 3 мин
+⚠️ ERROR повторился ещё 47 раз за 3 мин
+LogHub API · loghub-api · production
 
-🔴 ERROR: Cannot connect to database
+Сообщение: 🔴 Cannot connect to database
+Fingerprint: abc1def2
 ```
 
-Message обрезается до `TELEGRAM_DEDUP_MESSAGE_MAX_LENGTH = 200`.
+Message обрезается до `TELEGRAM_DEDUP_MESSAGE_MAX_LENGTH = 200`. В summary передаются service name, slug, environment и fingerprint последнего лога.
 
 ### formatWelcomeMessage
 
 ```
-🔧 Топик создан для сервиса "Мой сайт"
+🔧 Топик подключён
 
+Сервис: Мой сайт
 Slug: my-website
-Все ошибки этого сервиса будут публиковаться в этот топик.
+
+Сюда будут публиковаться ошибки и summary дедупликации.
 ```
 
 ### HTML escaping
@@ -100,6 +123,11 @@ Slug: my-website
 |------------|----------|--------|
 | `TELEGRAM_BOT_TOKEN` | Токен бота (формат `{bot_id}:{token}`) | `123456789:AABBCCDDEEFFaabb...` |
 | `TELEGRAM_FORUM_CHAT_ID` | ID чата-форума (отрицательное число для групп) | `-1001234567890` |
+
+## Важно для production
+
+- Бот должен иметь права на создание forum topics в Telegram-группе, иначе `createForumTopic` будет падать с `400 Bad Request: not enough rights to create a topic`
+- Без этих прав доставка сообщений не будет работать, даже если форматирование и Bot API token настроены корректно
 
 ## Константы
 
