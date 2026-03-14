@@ -38,3 +38,8 @@ prisma/*.db-journal
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Internal docs (specs, AI instructions)
+specs/
+CLAUDE.MD
+AGENTS.md
