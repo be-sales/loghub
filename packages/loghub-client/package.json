@@ -1,0 +1,23 @@
+{
+  "name": "@besales/loghub-client",
+  "version": "1.0.0",
+  "description": "Lightweight TypeScript client for LogHub error logging service",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "yarn build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "logging",
+    "error-tracking",
+    "telegram"
+  ],
+  "license": "MIT"
+}

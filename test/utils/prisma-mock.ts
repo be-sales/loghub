@@ -12,6 +12,7 @@ export function createPrismaMock() {
     },
     errorLog: {
       create: jest.fn(),
+      update: jest.fn(),
       findFirst: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),

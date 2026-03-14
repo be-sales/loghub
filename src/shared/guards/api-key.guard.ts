@@ -13,8 +13,8 @@ import {
   API_KEY_HEADER,
   API_KEY_CACHE_PREFIX,
   API_KEY_CACHE_TTL_SECONDS,
+  API_KEY_FORMAT_REGEX,
   API_KEY_MAX_LENGTH,
-  API_KEY_PREFIX,
 } from '@shared/constants';
 import { ServiceContext } from '@shared/interfaces/service-context.interface';
 
@@ -43,7 +43,8 @@ export class ApiKeyGuard implements CanActivate {
       throw new UnauthorizedException('Отсутствует API-ключ в заголовке X-API-Key');
     }
 
-    if (apiKey.length > API_KEY_MAX_LENGTH || !apiKey.startsWith(API_KEY_PREFIX)) {
+    // Быстрая проверка длины перед regex (защита от oversized input)
+    if (apiKey.length > API_KEY_MAX_LENGTH || !API_KEY_FORMAT_REGEX.test(apiKey)) {
       throw new UnauthorizedException('Неверный формат API-ключа');
     }
 

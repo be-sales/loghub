@@ -11,6 +11,7 @@ const config: Config = {
   coverageDirectory: './coverage',
   testEnvironment: 'node',
   moduleNameMapper: {
+    '^@besales/loghub-client$': '<rootDir>/packages/loghub-client/src/index',
     '^@core/(.*)$': '<rootDir>/src/core/$1',
     '^@admin/(.*)$': '<rootDir>/src/admin/$1',
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',

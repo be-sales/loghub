@@ -4,7 +4,10 @@ import { FINGERPRINT_STACK_LINES } from '@shared/constants';
 /**
  * Вычисляет fingerprint ошибки для дедупликации.
  *
- * Формула: SHA-256(serviceId + level + normalizedMessage + first N lines of stack)
+ * Формула: SHA-256(JSON([serviceId, level, normalizedMessage, normalizedStack]))
+ *
+ * JSON.stringify используется вместо join('|') для устранения коллизий:
+ * если поле содержит '|', join давал одинаковый input для разных комбинаций полей.
  *
  * Нормализация:
  * - Удаляются числа из сообщения (timestamps, IDs)
@@ -20,7 +23,7 @@ export function computeFingerprint(
   const normalizedMessage = normalizeMessage(message);
   const normalizedStack = normalizeStackTrace(stackTrace);
 
-  const input = [serviceId, level, normalizedMessage, normalizedStack].join('|');
+  const input = JSON.stringify([serviceId, level, normalizedMessage, normalizedStack]);
 
   return createHash('sha256').update(input).digest('hex');
 }

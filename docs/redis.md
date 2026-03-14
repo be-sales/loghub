@@ -48,7 +48,7 @@ TTL:     180 секунд (DEDUP_WINDOW_SECONDS)
 
 ```
 Ключ:    apikey:{apiKeyHash}
-Значение: JSON { "serviceId": string, "slug": string, "isActive": boolean }
+Значение: JSON { "serviceId": string, "slug": string }
 TTL:     300 секунд (API_KEY_CACHE_TTL_SECONDS)
 ```
 

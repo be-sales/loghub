@@ -1,25 +1,22 @@
 import { createHmac, randomBytes } from 'crypto';
-import { API_KEY_PREFIX, API_KEY_LENGTH, API_KEY_DISPLAY_PREFIX_LENGTH } from '@shared/constants';
+import { API_KEY_PREFIX, API_KEY_LENGTH } from '@shared/constants';
 
 /**
  * Генерирует новый API-ключ.
- * @returns {{ apiKey: string; apiKeyHash: string; apiKeyDisplayPrefix: string }}
+ * @returns {{ apiKey: string; apiKeyHash: string }}
  *
- * apiKeyDisplayPrefix — первые N символов случайной части для идентификации ключа
- * в UI (аналог последних 4 цифр карты). Хранится в БД для отображения пользователю.
+ * apiKey — возвращается пользователю один раз, в БД не хранится.
+ * apiKeyHash — HMAC-SHA256 хеш, хранится в БД для проверки.
  */
 export function generateApiKey(): {
   apiKey: string;
   apiKeyHash: string;
-  apiKeyDisplayPrefix: string;
 } {
   const raw = randomBytes(API_KEY_LENGTH / 2).toString('hex');
   const apiKey = `${API_KEY_PREFIX}${raw}`;
   const apiKeyHash = hashApiKey(apiKey);
-  // Берём первые символы случайной части — стандартная практика для display prefix
-  const apiKeyDisplayPrefix = `${API_KEY_PREFIX}${raw.substring(0, API_KEY_DISPLAY_PREFIX_LENGTH)}...`;
 
-  return { apiKey, apiKeyHash, apiKeyDisplayPrefix };
+  return { apiKey, apiKeyHash };
 }
 
 /**

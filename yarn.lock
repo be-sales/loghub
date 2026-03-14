@@ -461,6 +461,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@besales/loghub-client@workspace:packages/loghub-client":
+  version: 0.0.0-use.local
+  resolution: "@besales/loghub-client@workspace:packages/loghub-client"
+  languageName: unknown
+  linkType: soft
+
 "@borewit/text-codec@npm:^0.2.1":
   version: 0.2.1
   resolution: "@borewit/text-codec@npm:0.2.1"

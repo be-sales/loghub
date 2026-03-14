@@ -47,7 +47,8 @@ export class AdminAuthService {
     const passwordMatches = await bcrypt.compare(password, this.adminPasswordHash);
 
     if (!loginMatches || !passwordMatches) {
-      this.logger.warn(`Неудачная попытка входа: login="${login.substring(0, 50)}"`);
+      // Не логируем входной логин — потенциальная утечка данных в логи
+      this.logger.warn('Неудачная попытка входа в систему');
       throw new UnauthorizedException('Неверные учётные данные');
     }
 
@@ -59,6 +60,7 @@ export class AdminAuthService {
 
     const accessToken = jwt.sign(payload, this.jwtSecret, {
       expiresIn: ADMIN_JWT_EXPIRY,
+      algorithm: 'HS256',
     });
 
     return { accessToken };
@@ -71,7 +73,10 @@ export class AdminAuthService {
    */
   verifyToken(token: string): AdminJwtPayload {
     try {
-      return jwt.verify(token, this.jwtSecret) as AdminJwtPayload;
+      // Явно указываем алгоритм — защита от algorithm confusion атаки
+      return jwt.verify(token, this.jwtSecret, {
+        algorithms: ['HS256'],
+      }) as AdminJwtPayload;
     } catch {
       throw new UnauthorizedException('Невалидный или истёкший токен');
     }

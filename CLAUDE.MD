@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - После каждой исполненой задачи вызывай `yarn lint:fix`
 - Каждый файл должен быть не больше 1200 строк
 - Обязательно создавай тесты основных функций
-- Обязательно создавай человеко-читаемую документацию каждого модуля в apps/docs/ и обновляй её, когда что-то меняешь в логике модуля
+- Обязательно создавай человеко-читаемую документацию каждого модуля в docs/ и обновляй её, когда что-то меняешь в логике модуля
 - В путях везде используется префикс api
 - Не используй barrel exports
 - Обязательно используй Path Aliases
@@ -62,7 +62,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Стек:** NestJS 11 + Fastify adapter, TypeScript 5, Prisma 6 + PostgreSQL 16, Redis 7 (ioredis), нативный fetch для Telegram Bot API
 
 
-**Структура проекта (monorepo, Turborepo):**
+**Структура проекта:**
 
 ```
 loghub/
@@ -85,7 +85,8 @@ loghub/
     │   │   │   ├── ingestion.controller.ts   # POST /api/logs/ingest
     │   │   │   ├── ingestion.service.ts      # Orchestration
     │   │   │   └── dto/
-    │   │   │       └── ingest-log.dto.ts
+    │   │   │       ├── ingest-log.dto.ts
+    │   │   │       └── ingest-response.dto.ts
     │   │   ├── dedup/
     │   │   │   ├── dedup.module.ts
     │   │   │   ├── dedup.service.ts          # Fingerprint + Redis throttle
@@ -109,12 +110,13 @@ loghub/
     │   └── shared/
     │       ├── guards/
     │       │   ├── api-key.guard.ts          # X-API-Key → serviceId
-    │       │   └── admin.guard.ts            # Bearer JWT
+    │       │   └── admin.guard.ts            # JWT (cookie + Bearer fallback)
     │       ├── decorators/
     │       │   └── current-service.decorator.ts
     │       ├── interfaces/
     │       │   ├── service-context.interface.ts
-    │       │   └── log-entry.interface.ts
+    │       │   ├── log-entry.interface.ts
+    │       │   └── paginated-result.interface.ts
     │       ├── constants/
     │       │   └── index.ts
     │       ├── enums/
@@ -131,8 +133,10 @@ loghub/
     │   ├── unit/
     │   └── e2e/
     ├── packages/
-    │   └── loghub-client/              # SDK npm-пакет
-    ├── Dockerfile                      # Для Railway
+    │   └── loghub-client/              # SDK npm-пакет @besales/loghub-client
+    ├── Dockerfile                      # Multi-stage build для Railway
+    ├── .dockerignore                   # Исключения Docker build context
+    ├── railway.toml                    # Railway: builder, healthcheck, restart policy
     ├── .env.example
     └── package.json
 ```
@@ -157,6 +161,7 @@ ValidationPipe → class-validator (whitelist + forbidNonWhitelisted)
       │
       ▼
 IngestionService:
+  0. validateMetadataSize() → 413 если > 50KB
   1. computeFingerprint(serviceId + level + message + stack_first_3_lines)
   2. DedupService.checkAndMark() → Redis SET NX EX 180
      ├─ NOT exists → SET key, isDuplicate=false
@@ -188,27 +193,26 @@ DedupFlushService → SCAN Redis dedup:* → entries с count > 1 и TTL ≤ 10
 ### Path Aliases
 
 ```typescript
-// apps/api/tsconfig.json paths:
+// tsconfig.json paths:
 "@core/*":         ["src/core/*"]
-"@transport/*":    ["src/transport/*"]
-"@integrations/*": ["src/integrations/*"]
+"@admin/*":        ["src/admin/*"]
 "@shared/*":       ["src/shared/*"]
 "@prisma/*":       ["src/prisma/*"]
 "@config/*":       ["src/config/*"]
-"@admin/*":        ["src/admin/*"]
-"@memory/*":       ["src/memory/*"]
-
-// apps/admin/tsconfig.json paths:
-"@/*":             ["./src/*"]
+"@redis/*":        ["src/redis/*"]
+"@transport/*":    ["src/transport/*"]       // зарезервировано
+"@integrations/*": ["src/integrations/*"]    // зарезервировано
+"@memory/*":       ["src/memory/*"]          // зарезервировано
 
 // Примеры использования:
-import { ChatService } from '@core/chat/chat.service';
-import { TokensService } from '@core/tokens/tokens.service';
-import { UsersService } from '@core/users/users.service';
-import { LlmService } from '@integrations/llm/llm.service';
-import { MemoryService } from '@memory/memory.service';
+import { IngestionService } from '@core/ingestion/ingestion.service';
+import { DedupService } from '@core/dedup/dedup.service';
+import { ServicesService } from '@core/services/services.service';
+import { TelegramService } from '@core/telegram/telegram.service';
 import { PrismaService } from '@prisma/prisma.service';
-import { TokensGuard } from '@shared/guards/tokens.guard';
+import { RedisService } from '@redis/redis.service';
+import { ApiKeyGuard } from '@shared/guards/api-key.guard';
+import { AdminAuthService } from '@admin/admin-auth.service';
 ```
 
 ### Key Modules
@@ -228,23 +232,20 @@ import { TokensGuard } from '@shared/guards/tokens.guard';
 
 ```
 AppModule
-├── ConfigModule (Global)
+├── AppConfigModule (Global)
 ├── ScheduleModule.forRoot()
+├── ThrottlerModule.forRoot()
 ├── PrismaModule (Global)
 ├── RedisModule (Global)
-├── IngestionModule
-│   ├── imports: DedupModule, TelegramModule
-│   └── provides: IngestionController, IngestionService
+├── AdminModule
+│   ├── imports: ServicesModule
+│   └── provides: AdminController, AdminAuthService (exported), AdminGuard
 ├── DedupModule
 │   ├── imports: TelegramModule
 │   └── provides: DedupService, DedupFlushService
-├── ServicesModule
-│   └── provides: ServicesService (exported)
-├── TelegramModule
-│   └── provides: TelegramService (exported), TelegramFormatterService
-├── AdminModule
-│   ├── imports: ServicesModule
-│   └── provides: AdminController, AdminAuthService (exported)
+├── IngestionModule
+│   ├── imports: DedupModule, TelegramModule
+│   └── provides: IngestionController, IngestionService
 └── HealthController
 ```
 ### Key Domain Concepts
@@ -255,55 +256,87 @@ AppModule
 | ErrorLog | Лог ошибки от внешнего сервиса. Содержит level, message, stackTrace, metadata, fingerprint | `prisma/schema.prisma`, `core/ingestion/` |
 | Fingerprint | SHA-256 от serviceId+level+normalizedMessage+stack_first_3_lines. Для дедупликации | `shared/utils/fingerprint.util.ts` |
 | Dedup Window | Окно дедупликации 3 мин (DEDUP_WINDOW_SECONDS=180). Первая ошибка проходит, повторы подавляются | `core/dedup/` |
-| API Key | `sk_live_` + 32 hex. Хранится как SHA-256 hash. Показывается один раз при создании | `shared/utils/crypto.util.ts` |
+| API Key | `sk_live_` + 32 hex. Хранится как HMAC-SHA256 hash (HMAC_SECRET). Показывается один раз при создании | `shared/utils/crypto.util.ts` |
 | Forum Topic | Топик в Telegram-группе формата Forum. Один топик = один сервис. Создаётся лениво | `core/telegram/` |
 | Dedup Summary | Сообщение "Ошибка повторилась ещё N раз за 3 мин". Отправляется cron-job при flush | `core/dedup/dedup-flush.service.ts` |
-### LLM Integration Rules
 
-Данный микросервис **не использует LLM**. Это чисто инфраструктурный сервис (приём логов → дедупликация → Telegram). Никаких вызовов OpenAI/Anthropic/OpenRouter.
+> Данный микросервис **не использует LLM**. Никаких вызовов OpenAI/Anthropic/OpenRouter.
+
 ### Constants (не магические числа)
 
 ```typescript
-// shared/constants/index.ts
+// shared/constants/index.ts — полный список
 
 // Дедупликация
-DEDUP_WINDOW_SECONDS = 180;           // 3 минуты — окно дедупликации
-DEDUP_FLUSH_INTERVAL_MS = 180_000;    // 3 минуты — интервал flush cron
+DEDUP_WINDOW_SECONDS = 180;                    // 3 мин — окно дедупликации
+DEDUP_FLUSH_INTERVAL_MS = 180_000;             // 3 мин — интервал flush cron
 DEDUP_REDIS_PREFIX = 'dedup:';
+DEDUP_FLUSH_TTL_THRESHOLD_SECONDS = 10;        // порог TTL для flush
+DEDUP_SCAN_COUNT = 100;                        // ключей за один SCAN
 
 // API Key
 API_KEY_PREFIX = 'sk_live_';
-API_KEY_LENGTH = 32;                  // hex символов (16 bytes)
-API_KEY_CACHE_TTL_SECONDS = 300;      // 5 минут — кэш resolved ключей
+API_KEY_LENGTH = 32;                           // hex символов (16 bytes)
+API_KEY_DISPLAY_PREFIX_LENGTH = 8;
+API_KEY_MAX_LENGTH = 200;                      // защита от oversized input
+API_KEY_CACHE_TTL_SECONDS = 300;               // 5 мин — кэш resolved ключей
 API_KEY_CACHE_PREFIX = 'apikey:';
 API_KEY_HEADER = 'x-api-key';
 
+// Services
+SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
+
 // Telegram
 TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
-TELEGRAM_RATE_LIMIT_PER_SECOND = 20;  // консервативнее лимита 30/sec
+TELEGRAM_RATE_LIMIT_PER_SECOND = 20;           // консервативнее лимита 30/sec
 TELEGRAM_RETRY_ATTEMPTS = 3;
 TELEGRAM_RETRY_DELAY_MS = 1000;
+TELEGRAM_STACK_MAX_LINES = 15;
+TELEGRAM_METADATA_MAX_LENGTH = 500;
+TELEGRAM_DEDUP_MESSAGE_MAX_LENGTH = 200;
+TELEGRAM_TOPIC_LOCK_PREFIX = 'topic_lock:';
+TELEGRAM_TOPIC_LOCK_TTL_SECONDS = 30;
+TELEGRAM_TOPIC_LOCK_WAIT_MS = 2000;
+TELEGRAM_RATE_LIMIT_PREFIX = 'tg_rate:';
+TELEGRAM_RATE_LIMIT_TTL_SECONDS = 2;
+TELEGRAM_API_BASE_URL = 'https://api.telegram.org';
+TELEGRAM_TOPIC_ICON_COLOR = 0xfb6f5f;
 
 // Ingestion
 MAX_STACK_TRACE_LENGTH = 10_000;
 MAX_MESSAGE_LENGTH = 2_000;
-MAX_METADATA_SIZE_BYTES = 50_000;     // 50KB
+MAX_METADATA_SIZE_BYTES = 50_000;              // 50KB
 FINGERPRINT_STACK_LINES = 3;
 
 // Admin
 ADMIN_JWT_EXPIRY = '24h';
 DEFAULT_PAGE_SIZE = 50;
 MAX_PAGE_SIZE = 200;
+
+// Redis
+REDIS_MAX_RETRIES_PER_REQUEST = 3;
+REDIS_RETRY_DELAY_STEP_MS = 200;
+REDIS_MAX_RETRY_DELAY_MS = 2_000;
+
+// Health
+HEALTH_CHECK_INTERVAL_MS = 30_000;
+
+// Security
+BCRYPT_ROUNDS = 12;
+LOGIN_THROTTLE_TTL_SECONDS = 900;              // 15 мин
+LOGIN_THROTTLE_LIMIT = 5;
+BODY_LIMIT_BYTES = 1_048_576;                  // 1MB
+COOKIE_MAX_AGE_SECONDS = 86_400;               // 24 часа
 ```
 ---
 
 ## 🛠️ COMMANDS
 
-### Backend (apps/api)
+### Команды
 
 ```bash
 # Разработка
-yarn dev                    # Запуск dev сервера (port 3001)
+yarn dev                    # Запуск dev сервера (port 3000)
 yarn build                  # Production сборка
 yarn start:prod             # Запуск production
 
@@ -311,7 +344,7 @@ yarn start:prod             # Запуск production
 yarn db:generate            # Генерация Prisma Client
 yarn db:migrate             # Создание миграции
 yarn db:migrate:prod        # Применение миграций (production)
-yarn db:seed                # Seed данных (создание админа)
+yarn db:seed                # Seed данных (создание тестового сервиса)
 yarn db:studio              # Prisma Studio GUI
 
 # Линтинг
@@ -325,30 +358,6 @@ yarn test                   # Unit тесты
 yarn test:watch             # Тесты в watch режиме
 yarn test:cov               # Тесты с coverage
 yarn test:e2e               # E2E тесты
-```
-
-### Admin Panel (apps/admin)
-
-```bash
-# Разработка
-yarn dev                    # Запуск dev сервера (port 3000)
-yarn build                  # Production сборка
-yarn preview                # Preview production сборки
-
-# Линтинг
-yarn lint                   # ESLint проверка
-yarn lint:fix               # ESLint с авто-исправлением
-yarn lint:errors            # Только ошибки
-yarn format                 # Prettier форматирование
-```
-
-### Monorepo (root)
-
-```bash
-yarn dev                    # Запуск всех apps (Turborepo)
-yarn build                  # Build всех apps
-yarn db:generate            # Proxy → apps/api db:generate
-yarn db:migrate             # Proxy → apps/api db:migrate
 ```
 
 ---
@@ -366,7 +375,6 @@ yarn test:e2e               # E2E тесты (нужна БД)
 ### Backend Unit тесты
 
 - При добавлении сервиса в constructor — добавлять mock в тесты
-- pgvector: мокать embedding-запросы в тестах (не вызывать OpenAI)
 - Jest moduleNameMapper: паттерн `^@prisma/(.*)$` ловит node_modules, использовать `^@prisma/prisma\\.(.*)$`
 
 ### Что обязательно покрыть тестами (backend)
@@ -405,7 +413,7 @@ yarn test:e2e               # E2E тесты (нужна БД)
 
 ### Типизация
 
-- `unknown` вместо `any` на границах системы (HTTP, queue, webhook, Astrology API responses)
+- `unknown` вместо `any` на границах системы (HTTP, queue, webhook)
 - `never` для невозможных веток + `assertUnreachable()`
 - Явный return type для публичных методов/use-cases
 - Generics/abstract — только когда реально уменьшают дублирование
@@ -429,15 +437,12 @@ yarn test:e2e               # E2E тесты (нужна БД)
 
 - На границах: class-validator + понятные ошибки
 - ValidationPipe: `whitelist + forbidNonWhitelisted + transform`
-- Astrology API responses: валидировать перед сохранением в кэш
 
 ### Ошибки
 
 - Ожидаемые → Result/Either паттерн
 - Неожиданные → throw + логирование
 - Публичные use-cases: перечислять коды ошибок в JSDoc/Swagger
-- Astrology API ошибки: classify (auth → refresh key, rate_limit → backoff, other → fallback)
-- LLM ошибки: primary (OpenRouter) fail → fallback (OpenAI)
 
 ### Идемпотентность
 
@@ -457,7 +462,6 @@ yarn test:e2e               # E2E тесты (нужна БД)
 - Batching где нужно (createMany, updateMany)
 - Пагинация по умолчанию для списков + лимиты
 - Nullable Json поля: использовать spread `...(value && { field: value as unknown as Prisma.InputJsonValue })`
-- pgvector: использовать raw SQL для similarity search (`<=>` оператор)
 
 ### Трассировка
 
@@ -471,15 +475,16 @@ yarn test:e2e               # E2E тесты (нужна БД)
 
 ### Admin Panel (HTTP)
 
-- `POST /api/admin/login` — логин/пароль → JWT token
-- `AdminGuard` — проверка Bearer token на защищённых endpoints
-- Credentials из env: `ADMIN_LOGIN`, `ADMIN_PASSWORD`
+- `POST /api/admin/login` — логин/пароль → JWT в HttpOnly cookie
+- `POST /api/admin/logout` — очистка cookie
+- `AdminGuard` — проверка JWT из cookie (fallback: Bearer header)
+- Credentials из env: `ADMIN_LOGIN`, `ADMIN_PASSWORD`, `ADMIN_JWT_SECRET`
 
 ### Ingestion API (HTTP)
 
 - `POST /api/logs/ingest` — приём логов от внешних сервисов
 - `ApiKeyGuard` — проверка `X-API-Key` заголовка → resolve serviceId
-- API Key: формат `sk_live_` + 32 hex, хранится как SHA-256 hash
+- API Key: формат `sk_live_` + 32 hex, хранится как HMAC-SHA256 hash (HMAC_SECRET)
 - Кэш ключей в Redis (TTL 5 мин) для performance
 - Деактивированный сервис → 401 даже с валидным ключом
 - Перегенерация ключа: `POST /api/admin/services/:id/regenerate-key`
@@ -498,33 +503,18 @@ yarn test:e2e               # E2E тесты (нужна БД)
 
 - Входные данные всегда через DTO с валидацией
 - Обновлять DTO/types в том же PR что и код
-- Admin API DTOs: `LoginDto`, `GrantTokensDto`, `SetSubscriptionDto`, `UsersQueryDto`, `MessagesQueryDto`
+- DTOs: `LoginDto`, `CreateServiceDto`, `UpdateServiceDto`, `LogsQueryDto`, `IngestLogDto`, `IngestResponseDto`
 
   
 ---
 
 ## 🖥️ FRONTEND
 
-###  Panel (Next.js 16)
-
-- **Framework**: Next.js 16 (App Router) + React 19
-- **State**: Zustand 5 (auth store с persist) + TanStack React Query 5 (server state)
-- **UI**: Shadcn UI + Radix + Tailwind CSS 4 + Lucide icons + Sonner toasts
-- **Auth**: JWT в localStorage, auto-inject в API client
-- Functional components с TypeScript interfaces
-- Prefer interfaces over types; avoid enums (use maps)
-- Mobile-first responsive design
-- Named exports для компонентов
-- Директории: lowercase-with-dashes (`components/auth-wizard`)
-- Error Boundaries для обработки ошибок
-- i18n через context для локализации (en, ru)
-
-### Key  Components
-
 > LogHub v1 не имеет frontend admin panel. Управление через REST API (`/api/admin/*`).
-> При добавлении UI потребуются:
 
-- **LoginForm** — аутентификация админа (POST /api/admin/login → JWT)
+При добавлении UI потребуются:
+
+- **LoginForm** — аутентификация админа (POST /api/admin/login → JWT в cookie)
 - **ServicesTable** — список сервисов с _count логов, статусом, actions (edit/delete/regenerate key)
 - **ServiceCreateDialog** — форма создания сервиса (name, slug, description) + отображение API key один раз
 - **LogsTable** — таблица логов с фильтрами (service, level, date range, search) и пагинацией
@@ -543,4 +533,4 @@ yarn test:e2e               # E2E тесты (нужна БД)
 - [ ] Swagger актуален
 - [ ] Нет технического долга
 - [ ] Unit тесты для критических путей
-- [ ] Документация модуля в appsdocs/ обновлена
+- [ ] Документация модуля в docs/ обновлена

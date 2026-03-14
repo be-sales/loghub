@@ -5,13 +5,16 @@
   "description": "Централизованный сервис сбора и публикации error-логов в Telegram",
   "license": "UNLICENSED",
   "packageManager": "yarn@4.13.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "lint": "eslint \"{src,test}/**/*.ts\"",
-    "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
-    "lint:errors": "eslint \"{src,test}/**/*.ts\" --quiet",
+    "lint": "eslint \"{src,test,packages/*/src}/**/*.ts\"",
+    "lint:fix": "eslint \"{src,test,packages/*/src}/**/*.ts\" --fix",
+    "lint:errors": "eslint \"{src,test,packages/*/src}/**/*.ts\" --quiet",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
@@ -21,7 +24,8 @@
     "db:migrate": "yarn prisma migrate dev",
     "db:migrate:prod": "yarn prisma migrate deploy",
     "db:seed": "yarn prisma db seed",
-    "db:studio": "yarn prisma studio"
+    "db:studio": "yarn prisma studio",
+    "sdk:build": "yarn workspace @besales/loghub-client build"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
