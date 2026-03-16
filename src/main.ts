@@ -6,6 +6,7 @@ import fastifyCookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import { AppModule } from './app.module';
 import { BODY_LIMIT_BYTES } from '@shared/constants';
+import { registerAdminUiRoutes } from '@admin-ui/register-admin-ui';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -44,6 +45,8 @@ async function bootstrap(): Promise<void> {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
+
+  await registerAdminUiRoutes(app.getHttpAdapter().getInstance());
 
   // Swagger только в development — в production не доступен
   if (process.env.NODE_ENV === 'development') {

@@ -10,6 +10,7 @@ node_modules/
 # Build
 dist/
 build/
+public/
 
 # Environment
 .env
@@ -43,3 +44,4 @@ yarn-error.log*
 specs/
 CLAUDE.MD
 AGENTS.md
+AGENTS.MD

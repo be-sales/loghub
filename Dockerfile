@@ -27,6 +27,7 @@ RUN yarn prisma generate
 
 # Сборка (webpack bundle → dist/main.js)
 COPY src ./src/
+COPY scripts ./scripts/
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 RUN yarn build
 
@@ -56,6 +57,7 @@ RUN yarn install --immutable && \
 
 # Webpack bundle из builder stage
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 
 # Очистка build tools после компиляции нативных аддонов (~50MB)
 RUN apk del python3 make g++ && rm -rf /tmp/* /root/.cache

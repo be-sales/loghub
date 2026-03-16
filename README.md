@@ -31,6 +31,8 @@ yarn dev
 
 Swagger UI is available at `http://localhost:3000/api/docs` in development mode.
 
+Visual admin UI is available at `http://localhost:3000/admin` in development and at `/admin` on the deployed service.
+
 ## API
 
 ### Ingestion (external services)
@@ -40,6 +42,13 @@ Swagger UI is available at `http://localhost:3000/api/docs` in development mode.
 | `POST` | `/api/logs/ingest` | `X-API-Key` | Submit an error log |
 
 ### Admin
+
+#### Visual Admin UI
+
+- `GET /admin` — browser UI for login, service management, API key reveal, and regenerate key flows
+- Uses the same backend origin and the same HttpOnly cookie auth as Admin API
+
+#### Admin API
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|

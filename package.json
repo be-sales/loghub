@@ -9,8 +9,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "nest build",
-    "dev": "nest start --watch",
+    "build:admin-ui": "node ./scripts/build-admin-ui.mjs",
+    "build": "yarn build:admin-ui && nest build",
+    "dev": "yarn build:admin-ui && nest start --watch",
     "start:prod": "node dist/main.js",
     "lint": "eslint \"{src,test,packages/*/src}/**/*.ts\"",
     "lint:fix": "eslint \"{src,test,packages/*/src}/**/*.ts\" --fix",
@@ -58,6 +59,7 @@
     "@types/jsonwebtoken": "^9.0.0",
     "@types/node": "^20.0.0",
     "@types/supertest": "^6.0.0",
+    "esbuild": "^0.25.1",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "jest": "^29.0.0",

@@ -12,6 +12,7 @@ const config: Config = {
   testEnvironment: 'node',
   moduleNameMapper: {
     '^@besales/loghub-client$': '<rootDir>/packages/loghub-client/src/index',
+    '^@admin-ui/(.*)$': '<rootDir>/src/admin-ui/$1',
     '^@core/(.*)$': '<rootDir>/src/core/$1',
     '^@admin/(.*)$': '<rootDir>/src/admin/$1',
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',
