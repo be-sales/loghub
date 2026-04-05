@@ -186,7 +186,7 @@ export class TelegramService implements OnModuleInit {
 
     try {
       // Создание топика через Telegram API
-      const topicName = `🔴 ${service.name}`;
+      const topicName = service.name;
 
       const result = await this.callApi<{ message_thread_id: number }>(
         'createForumTopic',

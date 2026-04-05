@@ -301,7 +301,7 @@ describe('TelegramService', () => {
       >;
       expect(body).toEqual({
         chat_id: TEST_CHAT_ID,
-        name: '🔴 API Gateway',
+        name: 'API Gateway',
         icon_color: TELEGRAM_TOPIC_ICON_COLOR,
       });
     });

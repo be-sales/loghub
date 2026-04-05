@@ -22,7 +22,7 @@
    - **Lock NOT acquired** → wait `TELEGRAM_TOPIC_LOCK_WAIT_MS` (2s) → re-check БД → throw если всё ещё `null`
 4. Lock снимается в `finally` (только захватившим инстансом)
 
-**Имя топика:** `🔴 {serviceName}`
+**Имя топика:** `{serviceName}`
 **Цвет иконки:** `TELEGRAM_TOPIC_ICON_COLOR = 0xfb6f5f`
 
 ## Rate Limiting
